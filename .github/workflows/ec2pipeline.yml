@@ -1,1 +1,54 @@
+name: Push-to-EC2 instance Pipeline Setup
 
+# Trigger deployment only on push to the main branch
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Push to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v3
+
+      - name: Deploy to my EC2 instance
+        uses: easingthemes/ssh-deploy@v2.1.5
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          SOURCE: "./"
+          REMOTE_HOST: ${{ secrets.HOST_DNS }}
+          REMOTE_USER: ${{ secrets.USERNAME }}
+          TARGET: ${{ secrets.TARGET_DIR }}
+
+      - name: Executing remote ssh commands using ssh key
+        uses: appleboy/ssh-action@v0.1.0
+        with:
+          host: ${{ secrets.HOST_DNS }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Update the system
+            sudo yum -y update
+            
+            # Install Apache HTTP Server
+            sudo yum install -y httpd
+            sudo systemctl start httpd
+            sudo systemctl enable httpd
+
+            # Install Node.js and npm
+            sudo yum install -y nodejs npm
+
+            # Install dependencies and build the project
+            npm install
+            sudo npm run build
+
+            # Deploy the built files
+            cd build
+            sudo mv * /var/www/html
+
+            # Restart Apache to serve the application
+            sudo systemctl restart httpd
